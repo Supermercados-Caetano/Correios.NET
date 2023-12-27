@@ -1,4 +1,5 @@
-﻿using Correios.NET.Extensions;
+﻿//using AngleSharp.Io;
+using Correios.NET.Extensions;
 using Correios.NET.Models;
 using Newtonsoft.Json;
 using System.Collections.Generic;
@@ -40,22 +41,10 @@ namespace Correios.NET
 
         #region ZipCodes
 
-        private FormUrlEncodedContent CreateZipCodeRequest(string zipCode)
+        protected async Task<IEnumerable<Address>> GetAddressesInternalAsync(FormUrlEncodedContent request)
         {
-            var content = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string, string>("endereco", zipCode),
-                new KeyValuePair<string, string>("tipoCEP", "ALL")
-
-            });
-            return content;
-        }
-
-        public async Task<IEnumerable<Address>> GetAddressesAsync(string zipCode)
-        {
-            var request = CreateZipCodeRequest(zipCode);
             _httpClient.DefaultRequestHeaders.Referrer = new System.Uri("https://buscacepinter.correios.com.br/app/endereco/index.php");
-			var response = await _httpClient.PostAsync(ZIP_ADDRESS_URL, request);
+            var response = await _httpClient.PostAsync(ZIP_ADDRESS_URL, request);
 
             var jsonResponse = await response.Content.ReadAsStringAsync();
             var correiosAddressResponse = JsonConvert.DeserializeObject<CorreiosAddresResponse>(jsonResponse);
@@ -74,10 +63,39 @@ namespace Correios.NET
             return null;
         }
 
-        public IEnumerable<Address> GetAddresses(string zipCode)
+        private FormUrlEncodedContent CreateZipCodeRequest(string zipCode)
         {
-            return GetAddressesAsync(zipCode).RunSync();
+            var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("endereco", zipCode),
+                new KeyValuePair<string, string>("tipoCEP", "ALL")
+
+            });
+            return content;
         }
+
+        private FormUrlEncodedContent CreateAddressRequest(params string?[] partes)
+        {
+            var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("endereco", string.Join(", ", partes.Where(s => !string.IsNullOrWhiteSpace(s)))),
+                new KeyValuePair<string, string>("tipoCEP", "LOG")
+
+            });
+            return content;
+        }
+
+        public async Task<IEnumerable<Address>> GetAddressesAsync(string zipCode) =>
+            await GetAddressesInternalAsync(CreateZipCodeRequest(zipCode));
+        public async Task<IEnumerable<Address>> GetAddressesAsync(params string?[] partes) =>
+            await GetAddressesInternalAsync(CreateAddressRequest(partes));
+
+        public IEnumerable<Address> GetAddresses(string zipCode)
+            => GetAddressesAsync(zipCode).RunSync();
+
+        public IEnumerable<Address> GetAddresses(params string?[] partes)
+            => GetAddressesAsync(partes).RunSync();
+
 
         #endregion
     }
